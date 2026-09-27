@@ -52,8 +52,8 @@ export function Map({ siteLat, siteLon, fires, reports = [] }: MapProps) {
 
             {/* Central Target Site Marker */}
             <Marker position={[siteLat, siteLon]}>
-                <Popup className="font-semibold text-[#0369A1]">
-                    {siteLat === 9.855924 ? "Keeladi Excavation Site" : "Your Selected GPS Location"}
+                <Popup className="font-semibold text-zinc-800">
+                    Protected Zone Target
                 </Popup>
             </Marker>
 
