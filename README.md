@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛰️ Puga Sutham | Predictive Smoke Drift Early Warning System
 
-## Getting Started
+> **A satellite-driven, AI-validated threat monitoring platform designed to protect sensitive environmental zones, heritage sites, and populations from agricultural stubble burning and smoke drift.**
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🌪 The Problem
+Every year, agricultural stubble burning creates massive toxic smog crises across India, severely impacting public health and deteriorating exposed historical zones (like the Keeladi Excavation Site). Existing systems only report fires *after* the damage is done.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛡 The Solution
+**Puga Sutham** acts as a live Predictive Shield. We pull raw **NASA NRT (Near Real-Time) satellite thermal anomalies** and cross-reference them with live meteorological wind vectors to mathematically predict if toxic smoke will cross into a protected geofenced location within a 2-hour window.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### ✨ Key Features
+- **NASA FIRMS Integration:** Monitors high-confidence thermal anomalies via VIIRS satellites.
+- **Predictive Physics Engine:** Calculates Spherical Trigonometry (Haversine distance) and real-time wind trajectories to forecast exact smoke arrival times (ETA).
+- **Ground-Truth AI Override:** Solves satellite delay by allowing citizens to upload photos. An edge-deployed Neural Network (TensorFlow.js) validates the image. A highly-confident "Clear" photo automatically extinguishes NASA alerts, resolving false alarms instantly.
+- **Infinite Scalability:** Includes an automated, secure cron-based data pruning engine triggered via GitHub Actions, keeping Database edge queries lightning-fast.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 💻 Tech Stack
+- **Frontend / Framework:** Next.js 14 (App Router), React, Tailwind CSS
+- **Edge Database:** Turso (libSQL/SQLite)
+- **Caching Layer:** Upstash (Serverless Redis) for massive query rate-limiting
+- **Machine Learning:** TensorFlow.js (Edge-deployed visual classification)
+- **APIs:** NASA FIRMS (Satellites), Open-Meteo (Wind Vectors), OpenStreetMap (Visuals)
+- **Deployment:** Cloudflare Pages (Edge) + GitHub Actions CI/CD
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🚀 Google Cloud & GDG Vision (V2 Roadmap)
+Our core mathematical engine is complete. With Google Cloud credits and GDG mentorship, our immediate roadmap includes:
+1. **Google Vertex AI / Gemini 1.5 Pro:** Replacing our edge classifier with Gemini's multi-modal intelligence to deeply analyze citizen smoke uploads for toxicity profiles.
+2. **Google BigQuery:** Archiving millions of NASA fire data points globally to predict seasonal burning trends *before* fires are even lit.
+3. **Google Maps Platform:** Replacing OpenStreetMap for enterprise-grade B2B geofencing, allowing Indian hospitals and schools to natively define their own protection boundaries.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🛠 Local Setup
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/puga-sutham.git
+   cd puga-sutham
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Install dependancies:**
+   ```bash
+   npm install
+   ```
+
+3. **Environment Setup:**
+   Create a `.env.local` file in the root directory and add the following keys:
+   ```env
+   NASA_FIRMS_MAP_KEY=your_nasa_firms_key
+   UPSTASH_REDIS_REST_URL=your_upstash_url
+   UPSTASH_REDIS_REST_TOKEN=your_upstash_token
+   TURSO_DATABASE_URL=your_turso_url
+   TURSO_AUTH_TOKEN=your_turso_token
+   CRON_SECRET=your_secure_password
+   ```
+
+4. **Run the Development Server:**
+   ```bash
+   npm run dev
+   ```
+   Open `http://localhost:3000` to view the Live Dashboard.

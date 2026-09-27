@@ -1,0 +1,19 @@
+name: Automatic Database Pruning
+
+on:
+  schedule:
+    # Runs at midnight (00:00) every day
+    - cron: '0 0 * * *'
+  # Allows you to trigger it manually from the GitHub UI for your demo!
+  workflow_dispatch: 
+
+jobs:
+  prune-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit Cloudflare Prune API
+        run: |
+          curl -X GET "${{ secrets.PROD_URL }}/api/cron/prune" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          -H "Content-Type: application/json" \
+          --fail
