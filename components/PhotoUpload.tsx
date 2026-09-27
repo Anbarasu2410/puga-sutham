@@ -62,7 +62,16 @@ export function PhotoUpload() {
                     if (!res.ok) throw new Error("Failed to submit result");
 
                     setStatus("success");
-                    router.refresh(); // Refresh dashboard to show the new purple marker
+
+                    // Native Next.js refresh (works well on desktop)
+                    router.refresh();
+
+                    // Aggressive cache bust for mobile browsers (iOS Safari caches RSC aggressively)
+                    if (!isDesktop) {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1200);
+                    }
                 } catch (err) {
                     console.error("Classification/Upload failed:", err);
                     setStatus("error");
