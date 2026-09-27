@@ -4,6 +4,7 @@ import { db } from "../../../lib/db";
 import { redis } from "../../../lib/redis";
 import { Ratelimit } from "@upstash/ratelimit";
 import crypto from "crypto";
+import { revalidatePath } from "next/cache";
 
 const ratelimit = new Ratelimit({
     redis: redis,
@@ -64,9 +65,8 @@ export async function POST(request: Request) {
             ]
         });
 
-        // If classification is smoke, we also might want to create a fire_event,
-        // but the spec only explicitly demands writing to citizen_reports for now.
-        // If needed, we can expand this.
+        // Invalidate the cache for the home page so UI updates instantly
+        revalidatePath("/");
 
         return NextResponse.json({ success: true, data: { id: reportId } }, { status: 201 });
     } catch (error) {
