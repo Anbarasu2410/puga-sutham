@@ -17,17 +17,18 @@ interface FireEvent {
     id: string;
     latitude: number;
     longitude: number;
-    isWithinDriftCone: boolean;
+    isWithinDriftCone?: boolean;
 }
 
 interface MapProps {
     siteLat: number;
     siteLon: number;
     fires: FireEvent[];
-    reports?: any[];
+    smokeReports?: any[];
+    clearReports?: any[];
 }
 
-export function Map({ siteLat, siteLon, fires, reports = [] }: MapProps) {
+export function Map({ siteLat, siteLon, fires, smokeReports = [], clearReports = [] }: MapProps) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -66,26 +67,21 @@ export function Map({ siteLat, siteLon, fires, reports = [] }: MapProps) {
 
             {/* Fire Markers */}
             {fires.map((fire) => (
-                <Circle
-                    key={fire.id}
-                    center={[fire.latitude, fire.longitude]}
-                    pathOptions={{
-                        color: fire.isWithinDriftCone ? "#DC2626" : "#D97706",
-                        fillColor: fire.isWithinDriftCone ? "#DC2626" : "#D97706",
-                        fillOpacity: 0.5,
-                    }}
-                    radius={2000}
+                <Marker
+                    key={`fire-${fire.id}`}
+                    position={[fire.latitude, fire.longitude]}
                 >
                     <Popup>
-                        <p className="font-bold">Detected Fire</p>
-                        <p>{fire.isWithinDriftCone ? "Risk: DRIFT HEADING TO SITE" : "Risk: Low"}</p>
+                        <p className="font-bold">NASA Fire Detection</p>
+                        <p className="text-zinc-600">Satellite fire observation</p>
                     </Popup>
-                </Circle>
+                </Marker>
             ))}
+
             {/* Citizen Smoke Reports */}
-            {reports.map((report) => (
+            {smokeReports.map((report) => (
                 <Circle
-                    key={report.id}
+                    key={`smoke-${report.id}`}
                     center={[report.latitude, report.longitude]}
                     pathOptions={{
                         color: "#9333EA", // Vibrant Purple
@@ -95,8 +91,27 @@ export function Map({ siteLat, siteLon, fires, reports = [] }: MapProps) {
                     radius={1500}
                 >
                     <Popup>
-                        <p className="font-bold text-[#9333EA]">Citizen Smoke Report</p>
-                        <p>AI Validated (Confidence: {Math.round(report.confidenceScore * 100)}%)</p>
+                        <p className="font-bold text-[#9333EA]">Citizen Smoke Observation</p>
+                        <p>AI Confidence: {Math.round(report.confidenceScore * 100)}%</p>
+                    </Popup>
+                </Circle>
+            ))}
+
+            {/* Citizen Clear Reports */}
+            {clearReports.map((report) => (
+                <Circle
+                    key={`clear-${report.id}`}
+                    center={[report.latitude, report.longitude]}
+                    pathOptions={{
+                        color: "#10B981", // Emerald Green
+                        fillColor: "#10B981",
+                        fillOpacity: 0.8,
+                    }}
+                    radius={1500}
+                >
+                    <Popup>
+                        <p className="font-bold text-[#10B981]">Clear Air Observation</p>
+                        <p>AI Confidence: {Math.round(report.confidenceScore * 100)}%</p>
                     </Popup>
                 </Circle>
             ))}

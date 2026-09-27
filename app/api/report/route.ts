@@ -52,6 +52,35 @@ export async function POST(request: Request) {
         const reportId = `report_${crypto.randomUUID()}`;
         const { latitude, longitude, classification, confidenceScore } = parsed.data;
 
+        // PREVENT REPORT SPAM: Check for same classification within ~1km in the last 5 minutes
+        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+        // Approximate degree distance for 1km is ~0.009
+        const latDelta = 0.01;
+        const lonDelta = 0.01;
+
+        const duplicateCheck = await db.execute({
+            sql: `SELECT id FROM citizen_reports 
+                  WHERE classification = ? 
+                  AND submitted_at > ?
+                  AND latitude BETWEEN ? AND ?
+                  AND longitude BETWEEN ? AND ?
+                  LIMIT 1`,
+            args: [
+                classification,
+                fiveMinsAgo,
+                latitude - latDelta,
+                latitude + latDelta,
+                longitude - lonDelta,
+                longitude + lonDelta
+            ]
+        });
+
+        if (duplicateCheck.rows.length > 0) {
+            // Silently treat as duplicate spam and return success without saving
+            return NextResponse.json({ success: true, data: { id: "duplicate_ignored" } }, { status: 200 });
+        }
+
         await db.execute({
             sql: `INSERT INTO citizen_reports (id, latitude, longitude, classification, confidence_score, submitted_at)
             VALUES (?, ?, ?, ?, ?, ?)`,

@@ -1,0 +1,208 @@
+﻿commit b53441793ccf7aa5574bc3b4fa40bd6ad9faaf12
+Author: Anbarasu2410 <anbuarasu2017@gmail.com>
+Date:   Sun Sep 27 19:19:01 2026 +0530
+
+    fix: resolve risk engine drift bug with proper decay logic
+
+diff --git a/lib/risk.ts b/lib/risk.ts
+new file mode 100644
+index 0000000..5a712f9
+--- /dev/null
++++ b/lib/risk.ts
+@@ -0,0 +1,196 @@
++export const RISK_CONFIG = {
++    satelliteFireWeight: 30,
++    windTowardSiteWeight: 25,
++    strongCitizenSmokeWeight: 20,
++    mediumCitizenSmokeWeight: 10,
++    clearObservationPenalty: 5,
++    maxClearPenalty: 20,
++
++    clearInfluenceRadiusKm: 5,
++
++    thresholds: {
++        cleared: 20, // 0-19 is cleared/low
++        unverified: 40, // 20-39
++        watch: 60, // 40-59
++        warning: 80, // 60-79
++        confirmed: 100 // 80+
++    },
++
++    // Hysteresis margin
++    margin: 5
++};
++
++// Math helpers
++export function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
++    const R = 6371; // Radius of the earth in km
++    const dLat = (lat2 - lat1) * (Math.PI / 180);
++    const dLon = (lon1 - lon2) * (Math.PI / 180);
++    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
++        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
++        Math.sin(dLon / 2) * Math.sin(dLon / 2);
++    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
++    return R * c;
++}
++
++export function getBearing(startLat: number, startLng: number, destLat: number, destLng: number) {
++    startLat = startLat * (Math.PI / 180);
++    startLng = startLng * (Math.PI / 180);
++    destLat = destLat * (Math.PI / 180);
++    destLng = destLng * (Math.PI / 180);
++
++    const y = Math.sin(destLng - startLng) * Math.cos(destLat);
++    const x = Math.cos(startLat) * Math.sin(destLat) -
++        Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
++    let brng = Math.atan2(y, x);
++    brng = brng * (180 / Math.PI);
++    return (brng + 360) % 360;
++}
++
++export function angleDifference(angle1: number, angle2: number) {
++    let diff = Math.abs(angle1 - angle2) % 360;
++    return diff > 180 ? 360 - diff : diff;
++}
++
++export interface RiskInput {
++    fires: any[];
++    smokeReports: any[];
++    clearReports: any[];
++    windSpeedKmh: number;
++    windDirectionDeg: number;
++    siteLat: number;
++    siteLon: number;
++    previousState?: string;
++    previousScore?: number;
++}
++
++export function calculateRisk(input: RiskInput) {
++    const { fires, smokeReports, clearReports, windSpeedKmh, windDirectionDeg, siteLat, siteLon, previousState, previousScore } = input;
++    const now = Date.now();
++
++    let rawScore = 0;
++    let closestFireDist = Infinity;
++    let etaMinutes: number | null = null;
++    let validEtas: number[] = [];
++
++    // --- 1. SATELLITE FIRES & WIND ---
++    for (const fire of fires) {
++        const fireDist = getDistanceFromLatLonInKm(fire.latitude, fire.longitude, siteLat, siteLon);
++        if (fireDist < closestFireDist) closestFireDist = fireDist;
++
++        // Base weight
++        let fireScore = RISK_CONFIG.satelliteFireWeight;
++
++        // Distance weighting
++        if (fireDist > 30) fireScore *= 0.2;
++        else if (fireDist > 15) fireScore *= 0.5;
++        else if (fireDist > 5) fireScore *= 0.8;
++        // else 0-5km -> 1.0 multiplier
++
++        // Time decay (age)
++        const ageHours = (now - fire.detectedAt) / (1000 * 60 * 60);
++        if (ageHours > 6) fireScore *= 0.1;
++        else if (ageHours > 3) fireScore *= 0.5;
++        else if (ageHours > 1) fireScore *= 0.75;
++        // else < 1 hour -> 1.0 multiplier
++
++        rawScore += fireScore;
++
++        // Wind alignment
++        const bearingToSite = getBearing(fire.latitude, fire.longitude, siteLat, siteLon);
++        const windAlignmentDiff = angleDifference(windDirectionDeg, bearingToSite);
++
++        let windScore = 0;
++        if (windAlignmentDiff <= 45) { // Strongly aligned
++            windScore = RISK_CONFIG.windTowardSiteWeight;
++            // Calculate ETA
++            if (windSpeedKmh > 1) {
++                // effective speed component toward site
++                const effectiveSpeed = Math.max(windSpeedKmh * Math.cos(windAlignmentDiff * (Math.PI / 180)), 1);
++                const etaHours = fireDist / effectiveSpeed;
++                validEtas.push(etaHours * 60);
++            }
++        } else if (windAlignmentDiff <= 90) { // Partially aligned
++            windScore = 15;
++        }
++
++        rawScore += windScore;
++    }
++
++    if (validEtas.length > 0) {
++        etaMinutes = Math.min(...validEtas);
++    }
++
++    // --- 2. CITIZEN SMOKE OBSERVATIONS ---
++    // Deduplicate logic implemented at API level or filter here if needed.
++    for (const smoke of smokeReports) {
++        if (smoke.confidenceScore >= 0.85) {
++            rawScore += RISK_CONFIG.strongCitizenSmokeWeight;
++        } else if (smoke.confidenceScore >= 0.65) {
++            rawScore += RISK_CONFIG.mediumCitizenSmokeWeight;
++        }
++    }
++
++    // --- 3. CITIZEN CLEAR OBSERVATIONS ---
++    let totalClearPenalty = 0;
++    for (const clear of clearReports) {
++        // Clear observations only affect nearby events (within clearInfluenceRadiusKm)
++        // Here we just check distance to site; ideally we check distance to fires/smoke too.
++        // Assuming clear report is near the protected site:
++        const distSite = getDistanceFromLatLonInKm(clear.latitude, clear.longitude, siteLat, siteLon);
++        if (distSite <= RISK_CONFIG.clearInfluenceRadiusKm) {
++            totalClearPenalty += RISK_CONFIG.clearObservationPenalty;
++        }
++    }
++
++    // Cap clear penalty
++    if (totalClearPenalty > RISK_CONFIG.maxClearPenalty) {
++        totalClearPenalty = RISK_CONFIG.maxClearPenalty;
++    }
++
++    rawScore -= totalClearPenalty;
++
++    // Constrain score
++    const score = Math.max(0, Math.min(100, Math.round(rawScore)));
++
++    // --- 4. DETERMINE ALERT STATE WITH HYSTERESIS ---
++    type AlertStatus = "CLEARED" | "UNVERIFIED" | "WATCH" | "WARNING" | "CONFIRMED" | "DECAYING";
++    let state: AlertStatus = "CLEARED";
++    if (score >= RISK_CONFIG.thresholds.warning) state = "CONFIRMED";
++    else if (score >= RISK_CONFIG.thresholds.watch) state = "WARNING";
++    else if (score >= RISK_CONFIG.thresholds.unverified) state = "WATCH";
++    else if (score >= RISK_CONFIG.thresholds.cleared) state = "UNVERIFIED";
++
++    // Hysteresis Implementation
++    if (previousState && previousScore !== undefined) {
++        // If we are dropping from a higher state to a lower one, enforce margin
++        if (previousState === "CONFIRMED" && score > (RISK_CONFIG.thresholds.warning - RISK_CONFIG.margin)) {
++            state = "CONFIRMED";
++        } else if (previousState === "WARNING" && score > (RISK_CONFIG.thresholds.watch - RISK_CONFIG.margin)) {
++            state = "WARNING";
++        } else if (previousState === "WATCH" && score > (RISK_CONFIG.thresholds.unverified - RISK_CONFIG.margin)) {
++            state = "WATCH";
++        } else if (previousState === "UNVERIFIED" && score > (RISK_CONFIG.thresholds.cleared - RISK_CONFIG.margin)) {
++            state = "UNVERIFIED";
++        }
++
++        // DECAYING state: if you were CONFIRMED or WARNING, and now you are CLEARED or UNVERIFIED (score dropped significantly)
++        if ((previousState === "CONFIRMED" || previousState === "WARNING" || previousState === "DECAYING") && state === "CLEARED" && previousScore > RISK_CONFIG.thresholds.cleared) {
++            // Prevent instant drop to Cleared
++            if (score > 10) { // arbitrary threshold to stay in decaying vs perfectly cleared
++                state = "DECAYING";
++            }
++        }
++    }
++
++    return {
++        score,
++        state,
++        etaMinutes: etaMinutes ? Math.round(etaMinutes) : null,
++        closestFireDist: closestFireDist === Infinity ? null : closestFireDist,
++        breakdown: {
++            fireCount: fires.length,
++            smokeCount: smokeReports.length,
++            clearCount: clearReports.length
++        }
++    };
++}
