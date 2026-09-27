@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Camera, UploadCloud, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Camera, UploadCloud, Loader2, X } from "lucide-react";
+import Webcam from "react-webcam";
 import { useRouter } from "next/navigation";
 import { classifyImage } from "../lib/model";
 import { KEELADI_LAT, KEELADI_LON } from "../lib/weather";
@@ -12,65 +13,88 @@ export function PhotoUpload() {
     const imageRef = useRef<HTMLImageElement>(null);
     const router = useRouter();
 
+    const [isDesktop, setIsDesktop] = useState(false);
+    const [showWebcam, setShowWebcam] = useState(false);
+    const webcamRef = useRef<Webcam>(null);
+
+    useEffect(() => {
+        setIsDesktop(!(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)));
+    }, []);
+
+    const captureScreenshot = useCallback(() => {
+        if (webcamRef.current) {
+            const imageSrc = webcamRef.current.getScreenshot();
+            if (imageSrc) {
+                setShowWebcam(false);
+                processDataUrl(imageSrc);
+            }
+        }
+    }, [webcamRef]);
+
+    const processDataUrl = (dataUrl: string) => {
+        setStatus("loading");
+        setResult(null);
+
+        if (imageRef.current) {
+            // We must wait for the img tag to physically finish rendering the new src
+            // before we allow TensorFlow to read its pixels.
+            imageRef.current.onload = async () => {
+                try {
+                    // Attempt to classify locally in browser using TF.js
+                    const prediction = await classifyImage(imageRef.current!);
+                    setResult(prediction);
+
+                    // Get User location, or fallback to site location for hackathon MVP
+                    let lat = KEELADI_LAT;
+                    let lon = KEELADI_LON;
+
+                    if ("geolocation" in navigator) {
+                        try {
+                            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                                navigator.geolocation.getCurrentPosition(resolve, reject);
+                            });
+                            lat = position.coords.latitude;
+                            lon = position.coords.longitude;
+                        } catch (err) {
+                            console.warn("Geolocation blocked/failed, falling back to Keeladi coords");
+                        }
+                    }
+
+                    // Submit the validated TF.js result directly to backend
+                    const res = await fetch("/api/report", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            latitude: lat,
+                            longitude: lon,
+                            classification: prediction.classification,
+                            confidenceScore: prediction.confidence
+                        })
+                    });
+
+                    if (!res.ok) throw new Error("Failed to submit result");
+
+                    setStatus("success");
+                    router.refresh(); // Refresh dashboard to show the new purple marker
+                } catch (err) {
+                    console.error("Classification/Upload failed:", err);
+                    setStatus("error");
+                }
+            };
+
+            // Trigger the image load
+            imageRef.current.src = dataUrl;
+        }
+    };
+
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        setStatus("loading");
-        setResult(null);
-
-        // Read and display image quickly
         const reader = new FileReader();
         reader.onload = async (event) => {
-            if (imageRef.current && event.target?.result) {
-                // We must wait for the img tag to physically finish rendering the new src
-                // before we allow TensorFlow to read its pixels.
-                imageRef.current.onload = async () => {
-                    try {
-                        // Attempt to classify locally in browser using TF.js
-                        const prediction = await classifyImage(imageRef.current!);
-                        setResult(prediction);
-
-                        // Get User location, or fallback to site location for hackathon MVP
-                        let lat = KEELADI_LAT;
-                        let lon = KEELADI_LON;
-
-                        if ("geolocation" in navigator) {
-                            try {
-                                const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-                                    navigator.geolocation.getCurrentPosition(resolve, reject);
-                                });
-                                lat = position.coords.latitude;
-                                lon = position.coords.longitude;
-                            } catch (err) {
-                                console.warn("Geolocation blocked/failed, falling back to Keeladi coords");
-                            }
-                        }
-
-                        // Submit the validated TF.js result directly to backend
-                        const res = await fetch("/api/report", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                latitude: lat,
-                                longitude: lon,
-                                classification: prediction.classification,
-                                confidenceScore: prediction.confidence
-                            })
-                        });
-
-                        if (!res.ok) throw new Error("Failed to submit result");
-
-                        setStatus("success");
-                        router.refresh(); // Refresh dashboard to show the new purple marker
-                    } catch (err) {
-                        console.error("Classification/Upload failed:", err);
-                        setStatus("error");
-                    }
-                };
-
-                // Trigger the image load
-                imageRef.current.src = event.target.result as string;
+            if (event.target?.result) {
+                processDataUrl(event.target.result as string);
             }
         };
         reader.readAsDataURL(file);
@@ -103,31 +127,73 @@ export function PhotoUpload() {
                 disabled={status === "loading"}
             />
 
-            <div className="flex flex-col sm:flex-row gap-3 w-full">
-                <label
-                    htmlFor="cameraInput"
-                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
-              ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg"}`}
-                >
-                    {status === "loading" ? (
-                        <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
+            {showWebcam ? (
+                <div className="flex flex-col gap-3 relative rounded-xl overflow-hidden bg-black object-cover">
+                    <Webcam
+                        audio={false}
+                        ref={webcamRef}
+                        screenshotFormat="image/jpeg"
+                        videoConstraints={{ facingMode: "environment" }}
+                        className="w-full rounded-xl"
+                    />
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                        <button
+                            onClick={() => setShowWebcam(false)}
+                            className="bg-white/20 hover:bg-white/30 backdrop-blur-md p-3 rounded-full text-white transition-all shadow-lg"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                        <button
+                            onClick={captureScreenshot}
+                            className="bg-white hover:bg-slate-100 p-4 rounded-full text-slate-900 transition-all shadow-xl ring-4 ring-white/30"
+                        >
+                            <Camera className="w-7 h-7" />
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    {/* If on desktop, intercept "Take Photo" to open the WebRTC webcam instead of a file input */}
+                    {isDesktop ? (
+                        <button
+                            onClick={() => setShowWebcam(true)}
+                            className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
+                  ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg"}`}
+                            disabled={status === "loading"}
+                        >
+                            {status === "loading" ? (
+                                <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
+                            ) : (
+                                <><Camera className="w-5 h-5" /> Take Photo</>
+                            )}
+                        </button>
                     ) : (
-                        <><Camera className="w-5 h-5" /> Take Photo</>
+                        <label
+                            htmlFor="cameraInput"
+                            className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
+                  ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg"}`}
+                        >
+                            {status === "loading" ? (
+                                <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
+                            ) : (
+                                <><Camera className="w-5 h-5" /> Take Photo</>
+                            )}
+                        </label>
                     )}
-                </label>
 
-                <label
-                    htmlFor="uploadInput"
-                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
+                    <label
+                        htmlFor="uploadInput"
+                        className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
               ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 shadow-sm hover:shadow-md"}`}
-                >
-                    {status === "loading" ? (
-                        <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
-                    ) : (
-                        <><UploadCloud className="w-5 h-5" /> Upload Photo</>
-                    )}
-                </label>
-            </div>
+                    >
+                        {status === "loading" ? (
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
+                        ) : (
+                            <><UploadCloud className="w-5 h-5" /> Upload Photo</>
+                        )}
+                    </label>
+                </div>
+            )}
 
             {/* Visually hidden but required for TF.js analysis */}
             <img ref={imageRef} alt="Preview" className="hidden" crossOrigin="anonymous" />
