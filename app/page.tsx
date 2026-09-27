@@ -46,7 +46,7 @@ async function getDashboardData() {
     args: []
   });
 
-  const mappedWind = windRes.rows.map(r => ({
+  const mappedWind = windRes.rows.map((r: any) => ({
     recordedAt: r.recordedAt as string,
     windSpeedKmh: Number(r.windSpeedKmh)
   }));
@@ -66,13 +66,13 @@ async function getDashboardData() {
     submittedAt: new Date(r.submitted_at).getTime()
   }));
 
-  const allSmokeReports = allReports.filter(r => r.classification === "smoke");
-  const clearReports = allReports.filter(r => r.classification === "clear");
+  const allSmokeReports = allReports.filter((r: any) => r.classification === "smoke");
+  const clearReports = allReports.filter((r: any) => r.classification === "clear");
 
   // CITIZEN OVERRIDE LOGIC 1: Remove old Smoke Reports if a newer Clear report exists
   const activeSmokeReports = [];
   for (const sr of allSmokeReports) {
-    const isResolved = clearReports.some(cr => {
+      const isResolved = clearReports.some((cr: any) => {
       const dist = getDistanceFromLatLonInKm(sr.latitude, sr.longitude, cr.latitude, cr.longitude);
       return dist <= 5 && cr.submittedAt > sr.submittedAt;
     });
@@ -80,7 +80,7 @@ async function getDashboardData() {
   }
 
   // CITIZEN OVERRIDE LOGIC 2: Filter out NASA fires if a newer "Clear" report exists within 5km
-  const activeAlertIds = new Set(alertsRes.rows.map(r => r.fire_event_id));
+  const activeAlertIds = new Set(alertsRes.rows.map((r: any) => r.fire_event_id));
 
   const mappedFires: { id: string; latitude: number; longitude: number; isWithinDriftCone: boolean }[] = [];
   for (const f of firesRes.rows) {
@@ -89,7 +89,7 @@ async function getDashboardData() {
     const fireTime = new Date(f.detected_at as string).getTime();
 
     // Check if citizen marked it as CLEAR after NASA detected it
-    const isResolvedByCitizen = clearReports.some(cr => {
+    const isResolvedByCitizen = clearReports.some((cr: any) => {
       const dist = getDistanceFromLatLonInKm(fireLat, fireLon, cr.latitude, cr.longitude);
       return dist <= 5 && cr.submittedAt > fireTime; // Within 5km and newer than the fire
     });
@@ -107,13 +107,13 @@ async function getDashboardData() {
   // Determine global status based on the FILTERED fires
   let globalStatus: "safe" | "warning" | "danger" = "safe";
   let eta: number | null = null;
-  const activeDrifts = mappedFires.filter(f => f.isWithinDriftCone);
+  const activeDrifts = mappedFires.filter((f: any) => f.isWithinDriftCone);
 
   if (activeDrifts.length > 0) {
     const etas = alertsRes.rows
-      .filter(r => mappedFires.some(mf => mf.id === r.fire_event_id))
-      .map(r => Number(r.estimated_arrival_minutes))
-      .filter(val => val > 0);
+        .filter((r: any) => mappedFires.some((mf: any) => mf.id === r.fire_event_id))
+        .map((r: any) => Number(r.estimated_arrival_minutes))
+        .filter((val: number) => val > 0);
 
     if (etas.length > 0) {
       eta = Math.min(...etas);
