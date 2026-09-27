@@ -84,27 +84,50 @@ export function PhotoUpload() {
                 Verify anomalous smoke drift. AI runs entirely on edge.
             </p>
 
-            {/* Hidden file input for capturing/uploading */}
+            {/* Hidden inputs for both options */}
             <input
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={handlePhotoUpload}
                 className="hidden"
                 id="cameraInput"
                 disabled={status === "loading"}
             />
+            <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+                id="uploadInput"
+                disabled={status === "loading"}
+            />
 
-            <label
-                htmlFor="cameraInput"
-                className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
-          ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg"}`}
-            >
-                {status === "loading" ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
-                ) : (
-                    <><Camera className="w-5 h-5" /> Take Photo</>
-                )}
-            </label>
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <label
+                    htmlFor="cameraInput"
+                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
+              ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg"}`}
+                >
+                    {status === "loading" ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
+                    ) : (
+                        <><Camera className="w-5 h-5" /> Take Photo</>
+                    )}
+                </label>
+
+                <label
+                    htmlFor="uploadInput"
+                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl cursor-pointer transition-all font-bold text-sm tracking-wide
+              ${status === "loading" ? "bg-slate-100 text-slate-400" : "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 shadow-sm hover:shadow-md"}`}
+                >
+                    {status === "loading" ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" /> Processing AI...</>
+                    ) : (
+                        <><UploadCloud className="w-5 h-5" /> Upload Photo</>
+                    )}
+                </label>
+            </div>
 
             {/* Visually hidden but required for TF.js analysis */}
             <img ref={imageRef} alt="Preview" className="hidden" crossOrigin="anonymous" />
