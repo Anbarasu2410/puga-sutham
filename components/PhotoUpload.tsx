@@ -66,12 +66,11 @@ export function PhotoUpload() {
                     // Native Next.js refresh (works well on desktop)
                     router.refresh();
 
-                    // Aggressive cache bust for mobile browsers (iOS Safari caches RSC aggressively)
-                    if (!isDesktop) {
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1200);
-                    }
+                    // Guarantee a complete UI update unconditionally by forcing a reload 
+                    // 1.5 seconds later. User agents can be spoofed, making detection unreliable.
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
                 } catch (err) {
                     console.error("Classification/Upload failed:", err);
                     setStatus("error");
