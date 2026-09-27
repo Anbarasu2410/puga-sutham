@@ -72,9 +72,10 @@ async function getDashboardData() {
   // CITIZEN OVERRIDE LOGIC 1: Remove old Smoke Reports if a newer Clear report exists
   const activeSmokeReports = [];
   for (const sr of allSmokeReports) {
-      const isResolved = clearReports.some((cr: any) => {
+    const isResolved = clearReports.some((cr: any) => {
       const dist = getDistanceFromLatLonInKm(sr.latitude, sr.longitude, cr.latitude, cr.longitude);
-      return dist <= 5 && cr.submittedAt > sr.submittedAt;
+      // Increased to 30km because Laptop Wi-Fi geolocation can regularly jump 10-20km
+      return dist <= 30 && cr.submittedAt > sr.submittedAt;
     });
     if (!isResolved) activeSmokeReports.push(sr);
   }
@@ -91,7 +92,7 @@ async function getDashboardData() {
     // Check if citizen marked it as CLEAR after NASA detected it
     const isResolvedByCitizen = clearReports.some((cr: any) => {
       const dist = getDistanceFromLatLonInKm(fireLat, fireLon, cr.latitude, cr.longitude);
-      return dist <= 5 && cr.submittedAt > fireTime; // Within 5km and newer than the fire
+      return dist <= 30 && cr.submittedAt > fireTime; // Within 30km and newer than the fire
     });
 
     if (!isResolvedByCitizen) {
@@ -111,9 +112,9 @@ async function getDashboardData() {
 
   if (activeDrifts.length > 0) {
     const etas = alertsRes.rows
-        .filter((r: any) => mappedFires.some((mf: any) => mf.id === r.fire_event_id))
-        .map((r: any) => Number(r.estimated_arrival_minutes))
-        .filter((val: number) => val > 0);
+      .filter((r: any) => mappedFires.some((mf: any) => mf.id === r.fire_event_id))
+      .map((r: any) => Number(r.estimated_arrival_minutes))
+      .filter((val: number) => val > 0);
 
     if (etas.length > 0) {
       eta = Math.min(...etas);
