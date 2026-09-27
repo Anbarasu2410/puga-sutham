@@ -1,13 +1,21 @@
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/web";
 
-const dbUrl = process.env.TURSO_DATABASE_URL;
-const dbToken = process.env.TURSO_AUTH_TOKEN;
+const rawUrl = process.env.TURSO_DATABASE_URL || "";
+const authToken = process.env.TURSO_AUTH_TOKEN;
 
-if (!dbUrl) {
+if (!rawUrl) {
   console.warn("TURSO_DATABASE_URL is not set. Database operations will fail unless tested offline if configured.");
 }
 
-export const db = createClient({
-  url: dbUrl || "file:local.db",
-  authToken: dbToken,
-});
+// Mock DB for build time so Cloudflare doesn't crash on 'file:' in the Edge runtime
+let client: any = null;
+if (rawUrl && (rawUrl.startsWith("http") || rawUrl.startsWith("libsql") || rawUrl.startsWith("ws"))) {
+  client = createClient({ url: rawUrl, authToken });
+} else {
+  console.warn("Using mock DB client because URL is missing or unsupported in edge runtime.");
+  client = {
+    execute: async () => ({ rows: [] }),
+  };
+}
+
+export const db = client;
